@@ -22,6 +22,9 @@ not open-licensed, so they could not be fixed. This one is MIT.
 - Tray **auto-hides** after a configurable idle time (default 15 s, 0 = never) and optionally when the
   mouse leaves it.
 - Grid grows in any of eight directions, N buttons per row, separate scale for the tray and the buttons.
+- **Shift-drag** a button to reorder the grid, or drop it on the zone under the grid to **pin** it as a
+  labelled row — `[button] Addon Name` — so the handful you use every day are not a hunting session.
+  Drag a pinned button back to the grid to unpin it.
 - Untick a button in the options to leave it on the minimap; it goes back exactly where it was.
 - Main button is draggable and follows the minimap if that moves. Optional: hide Blizzard's addon
   compartment on clients that have one.
@@ -32,6 +35,7 @@ not open-licensed, so they could not be fixed. This one is MIT.
 | Left | open / close the tray |
 | Right | options |
 | Drag | move the button |
+| Shift-drag a collected button | reorder, or pin / unpin |
 
 ## Slash `/mbt`
 

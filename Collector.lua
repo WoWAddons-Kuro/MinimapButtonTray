@@ -242,6 +242,8 @@ end
 function Collector.EnforceAlpha(frame)
   local record = recordByFrame[frame]
   if not record then return end
+  -- The tray dims the button it is shift-dragging; that alpha is the tray's.
+  if MBT.Tray.DraggedButton and MBT.Tray.DraggedButton() == frame then return end
   local alpha = Client.ReadNumber(frame:GetAlpha())
   if alpha ~= 1 then guardFades(frame, record) end
 end
@@ -301,9 +303,16 @@ function Collector.Grab(frame, label)
   restack(frame, container:GetFrameStrata(), trayLevel + 2, record.fixedStrata, record.fixedLevel)
   if Client.hasIgnoreParentScale then pcall(frame.SetIgnoreParentScale, frame, false) end
   Original.SetScale(frame, MBT.db.buttonScale)
-  -- Dragging would move the button around the minimap ring.
-  pcall(frame.SetScript, frame, "OnDragStart", nil)
-  pcall(frame.SetScript, frame, "OnDragStop", nil)
+  -- The addon's own drag handlers would move the button around the minimap
+  -- ring; ours only act on a shift-drag (reorder / pin inside the tray).
+  pcall(frame.SetScript, frame, "OnDragStart", MBT.Tray.OnButtonDragStart)
+  pcall(frame.SetScript, frame, "OnDragStop", MBT.Tray.OnButtonDragStop)
+  -- A button that never registered for drag (some hand-rolled ones) gets it
+  -- now; there is no getter to read the previous registration, so Release
+  -- leaves LeftButton registered - harmless with its own handlers restored.
+  if type(frame.RegisterForDrag) == "function" then
+    pcall(frame.RegisterForDrag, frame, "LeftButton")
+  end
 
   for _, method in ipairs(LOCKED_METHODS) do
     record.previousMethods[method] = rawget(frame, method)
@@ -534,6 +543,126 @@ function Collector.Uninclude(path)
   if frame and Collector.Release(frame) then MBT.Tray.Refresh() end
   Collector.Scan()
   return key
+end
+
+-- ---------------------------------------------------------------------------
+-- grid order and pins (shift-drag in the tray)
+-- ---------------------------------------------------------------------------
+local function indexIn(list, name)
+  for index, entry in ipairs(list) do
+    if entry == name then return index end
+  end
+  return nil
+end
+
+local function removeFrom(list, name)
+  local index = indexIn(list, name)
+  if index then table.remove(list, index) end
+  return index
+end
+
+function Collector.IsPinned(frame)
+  local record = recordByFrame[frame]
+  return record ~= nil and indexIn(MBT.db.pinned, record.name) ~= nil
+end
+
+-- Collected, unpinned buttons in grid order: db.order first (names that are
+-- collected right now), then the rest alphabetically.
+function Collector.GridButtons()
+  local byName, placed, result = {}, {}, {}
+  for _, frame in ipairs(Collector.buttons) do
+    if not Collector.IsPinned(frame) then byName[recordByFrame[frame].name] = frame end
+  end
+  for _, name in ipairs(MBT.db.order) do
+    local frame = byName[name]
+    if frame and not placed[frame] then
+      placed[frame] = true
+      result[#result + 1] = frame
+    end
+  end
+  for _, frame in ipairs(Collector.buttons) do   -- already sorted by name
+    if byName[recordByFrame[frame].name] and not placed[frame] then result[#result + 1] = frame end
+  end
+  return result
+end
+
+-- Collected pinned buttons in db.pinned order.
+function Collector.PinnedButtons()
+  local result = {}
+  for _, name in ipairs(MBT.db.pinned) do
+    local frame = Collector.Find(name)
+    if frame then result[#result + 1] = frame end
+  end
+  return result
+end
+
+-- Puts the button at gridIndex of the grid (1-based; nil = last), unpinning
+-- it if needed. db.order is rewritten as the whole resulting grid so buttons
+-- collected later sort after it.
+function Collector.MoveToGrid(frame, gridIndex)
+  local record = recordByFrame[frame]
+  if not record then return end
+  removeFrom(MBT.db.pinned, record.name)
+  local grid = Collector.GridButtons()
+  for index, other in ipairs(grid) do
+    if other == frame then table.remove(grid, index) break end
+  end
+  table.insert(grid, MBT.Clamp(gridIndex or (#grid + 1), 1, #grid + 1), frame)
+  local order = {}
+  for index, other in ipairs(grid) do order[index] = recordByFrame[other].name end
+  MBT.db.order = order
+  MBT.Tray.Refresh()
+end
+
+-- Pins the button at pinIndex of db.pinned (1-based; nil = last).
+function Collector.MoveToPinned(frame, pinIndex)
+  local record = recordByFrame[frame]
+  if not record then return end
+  removeFrom(MBT.db.pinned, record.name)
+  removeFrom(MBT.db.order, record.name)
+  table.insert(MBT.db.pinned, MBT.Clamp(pinIndex or (#MBT.db.pinned + 1), 1, #MBT.db.pinned + 1), record.name)
+  MBT.Tray.Refresh()
+end
+
+-- Human label for a frame name: library prefixes and the usual button
+-- suffixes removed, CamelCase split. "LibDBIcon10_GotJunk" -> "GotJunk",
+-- "ChatSyncMinimapButton" -> "Chat Sync".
+function Collector.DisplayName(name)
+  local label = name:gsub("^LibDBIcon10_", ""):gsub("^LibMapButton_", "")
+  label = label:gsub("[-_]?[Mm]inimap[-_]?[Bb]utton$", ""):gsub("[-_]?[Mm]inimap[-_]?[Ii]con$", "")
+  label = label:gsub("[-_]?[Mm]inimap$", ""):gsub("[-_]?[Bb]utton$", "")
+  if label == "" then label = name end
+  label = label:gsub("(%l)(%u)", "%1 %2"):gsub("[-_]+", " ")
+  return label
+end
+
+-- First texture file on the frame or its direct children, for the drag ghost.
+function Collector.IconOf(frame)
+  local function textureOf(owner)
+    if type(owner.GetRegions) ~= "function" then return nil end
+    local ok, regions = pcall(function() return { owner:GetRegions() } end)
+    if not ok then return nil end
+    for _, region in ipairs(regions) do
+      if type(region.GetTexture) == "function" and type(region.IsObjectType) == "function"
+        and region:IsObjectType("Texture") then
+        local okTex, texture = pcall(region.GetTexture, region)
+        if okTex and texture and texture ~= "" and not Client.IsSecret(texture) then return texture end
+      end
+    end
+    return nil
+  end
+  local texture = textureOf(frame)
+  if texture then return texture end
+  if type(frame.GetChildren) == "function" then
+    local ok, children = pcall(function() return { frame:GetChildren() } end)
+    if ok then
+      for _, child in ipairs(children) do
+        texture = textureOf(child)
+        if texture then return texture end
+      end
+    end
+  end
+  return nil
 end
 
 -- ---------------------------------------------------------------------------

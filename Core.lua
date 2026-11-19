@@ -37,6 +37,8 @@ local DEFAULTS = {
   posY = nil,               -- nil = default spot on the ring
   ignore = {},              -- [frameName] = true, never collected
   include = {},             -- [framePath] = true, always collected ("Frame" or "Frame.child")
+  order = {},               -- array of names: grid order after shift-drag; unlisted sort alphabetically after
+  pinned = {},              -- array of names: shown as [button] [name] rows under the grid
 }
 MBT.DEFAULTS = DEFAULTS
 

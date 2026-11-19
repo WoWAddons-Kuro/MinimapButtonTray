@@ -25,7 +25,7 @@ local function percent(value)
 end
 
 local function friendlyName(name)
-  return (name:gsub("^LibDBIcon10_", ""):gsub("^LibMapButton_", ""))
+  return MBT.Collector.DisplayName(name)
 end
 
 -- ---------------------------------------------------------------------------

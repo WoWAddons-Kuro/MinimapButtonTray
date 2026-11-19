@@ -125,6 +125,8 @@ open (name scan throttled to once per 5 s), `/mbt rescan`. Combat: scans are def
 | `posX`, `posY` | nil | main button offset from minimap centre; nil = default (bottom-left of the ring) |
 | `ignore` | `{}` | `[frameName] = true` never collected |
 | `include` | `{}` | `[path] = true` always collected |
+| `order` | `{}` | array of names: grid order set by shift-drag; unlisted buttons sort alphabetically after |
+| `pinned` | `{}` | array of names: shown as `[button] [name]` rows under the grid |
 
 ## Slash `/mbt`
 
@@ -172,8 +174,37 @@ None open. Answered 2026-11-18 (owner):
    stone frame). `Scripts/MakeAddonIcon.cs` makes `Media/MinimapButtonTray.tga`, used for the main
    button texture and the TOC `IconTexture`.
 
-## After v1
+## Shift-drag: reorder and pin
 
-- **Pinned list** (v2): a second drop zone below the grid. Dragging a collected button onto it pins it
-  as a labelled row — `[button] [addon name]`, one per line — so the handful of buttons used daily are
-  found at a glance instead of in a pile of 40 icons. Stored in `db.pinned` (ordered array of names).
+A collected button is dragged **only while Shift is held** (plain drag is still blocked: the addon's
+own drag handler would move the button around the minimap ring). While a button is held we own its
+`OnDragStart/OnDragStop`, so the drag is ours; the addon's handlers are restored on release.
+
+- **Ghost**: a `Texture` on a cursor-following frame copies the button's icon (first texture region
+  with a file id; falls back to the addon icon); the button itself dims to 40% while dragged.
+- **Drop zones** while dragging: every grid slot (including the one past the last button) and the
+  **pin zone** under the grid. The pin zone is drawn whenever `#db.pinned > 0` or a drag is in
+  progress, as a dashed-border empty row labelled *drop here to pin* when empty.
+- **Drop on a grid slot** → reorder: `db.order` becomes the new grid order (array of names). Buttons
+  not in `db.order` (new ones) sort alphabetically after the ordered ones. Dropping a pinned button
+  on the grid unpins it.
+- **Drop on the pin zone** → pin: name appended to `db.pinned` (or moved to the drop row's index).
+- **Pinned rows**: one per line under the grid, `[button] [DisplayName]`, left-aligned, same cell
+  height as the grid; the button is laid out exactly as in the grid (positioning via `Original.*`),
+  the label is ours. Row width = tray width; tray width = max(grid width, widest pinned row).
+- **Drop anywhere else** → cancel.
+- `DisplayName(name)`: strips `LibDBIcon10_` / `LibMapButton_` / trailing `MinimapButton|MinimapIcon|
+  Minimap|Button` suffixes, splits CamelCase with spaces. Used by the pinned rows and the options list.
+- Settings: `db.order` (array), `db.pinned` (array); both pruned of names not collected for 30 days?
+  **No** — pruned never; a name of an uninstalled addon is harmless and comes back if reinstalled.
+- Tray tooltip gains *Shift-drag: reorder or pin*.
+
+Section anchors inside the tray (all relative to the tray's top-left corner for every grow direction;
+the tray as a whole still anchors to the main button per `TRAY_ANCHORS`):
+
+```
+PADDING | grid rows (direction-aware, as before) | SPACING*2 | pin rows top→bottom | PADDING
+```
+
+Grow direction decides where the tray sits and how the grid fills; the pin section is always *below*
+the grid inside the tray, since reading rows top-to-bottom is what pinning is for.
