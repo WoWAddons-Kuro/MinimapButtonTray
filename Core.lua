@@ -289,6 +289,11 @@ commands.debug = function()
   for _, line in ipairs(MBT.Collector.Describe()) do print("  " .. line) end
 end
 
+commands.dragdebug = function()
+  MBT.Tray.dragDebug = not MBT.Tray.dragDebug
+  Print("drag debug %s - shift-drag a button and watch the chat", MBT.Tray.dragDebug and "on" or "off")
+end
+
 commands.help = usage
 
 local function handler(input)

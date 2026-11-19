@@ -28,6 +28,7 @@ local failedFrames = {}       -- [frame] = true when Grab raised; never retried
 local Original = {}
 local LOCKED_METHODS = { "SetPoint", "ClearAllPoints", "SetParent", "SetScale", "SetAllPoints", "SetAlpha" }
 for _, method in ipairs(LOCKED_METHODS) do Original[method] = UIParent[method] end
+Original.SetScript = UIParent.SetScript   -- wrapped (not no-op'd) on held frames, see Grab
 Collector.Original = Original
 
 local function noop() end
@@ -305,8 +306,20 @@ function Collector.Grab(frame, label)
   Original.SetScale(frame, MBT.db.buttonScale)
   -- The addon's own drag handlers would move the button around the minimap
   -- ring; ours only act on a shift-drag (reorder / pin inside the tray).
-  pcall(frame.SetScript, frame, "OnDragStart", MBT.Tray.OnButtonDragStart)
-  pcall(frame.SetScript, frame, "OnDragStop", MBT.Tray.OnButtonDragStop)
+  pcall(Original.SetScript, frame, "OnDragStart", MBT.Tray.OnButtonDragStart)
+  pcall(Original.SetScript, frame, "OnDragStop", MBT.Tray.OnButtonDragStop)
+  -- Addons (LibDBIcon:Refresh, :Unlock, lock toggles) re-set their drag
+  -- handlers at any time. While held, SetScript on the frame keeps ours in
+  -- place and remembers theirs so Release restores the latest.
+  record.previousMethods.SetScript = rawget(frame, "SetScript")
+  rawset(frame, "SetScript", function(self, which, handler, ...)
+    if which == "OnDragStart" then
+      record.dragStart, handler = handler, MBT.Tray.OnButtonDragStart
+    elseif which == "OnDragStop" then
+      record.dragStop, handler = handler, MBT.Tray.OnButtonDragStop
+    end
+    return Original.SetScript(self, which, handler, ...)
+  end)
   -- A button that never registered for drag (some hand-rolled ones) gets it
   -- now; there is no getter to read the previous registration, so Release
   -- leaves LeftButton registered - harmless with its own handlers restored.
@@ -672,9 +685,16 @@ function Collector.Describe()
   local lines = {}
   for _, frame in ipairs(Collector.buttons) do
     local alpha = Client.ReadNumber(frame:GetAlpha())
+    -- Drag diagnostics: whose OnDragStart is on the frame right now (ours is
+    -- needed for shift-drag), and does it take the mouse at all.
+    local dragHandler = scriptOf(frame, "OnDragStart")
+    local dragState = dragHandler == MBT.Tray.OnButtonDragStart and "drag ours"
+      or (dragHandler and "|cffff6666drag theirs|r") or "|cffff6666drag none|r"
+    local mouse = flag(frame, "IsMouseEnabled") and "" or ", |cffff6666mouse off|r"
     lines[#lines + 1] = "|cff00ff00collected|r " .. recordByFrame[frame].name
       .. (frame:IsShown() and "" or " (hidden by its addon)")
       .. ((alpha and alpha < 1) and (" |cffff6666alpha " .. alpha .. "|r") or "")
+      .. "  [" .. dragState .. mouse .. "]"
   end
   for _, entry in ipairs(namedMinimapChildren()) do
     if not recordByFrame[entry.frame] then

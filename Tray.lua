@@ -411,9 +411,19 @@ local function updateDrag()
   end
 end
 
+-- /mbt dragdebug: say why a drag did or did not start.
+Tray.dragDebug = false
+local function dragLog(fmt, ...)
+  if Tray.dragDebug then MBT.Print("drag: " .. fmt, ...) end
+end
+
 local function beginDrag(button)
-  if drag.frame or not IsShiftKeyDown() then return end
-  if not MBT.Collector.IsCollected(button) then return end
+  local name = MBT.Collector.LabelOf(button) or "?"
+  if drag.frame then dragLog("%s: ignored, already dragging", name) return end
+  if not IsShiftKeyDown() then dragLog("%s: shift not held", name) return end
+  if not MBT.Collector.IsCollected(button) then dragLog("%s: not collected", name) return end
+  if not container:IsShown() then dragLog("%s: tray closed", name) return end
+  dragLog("%s: start", name)
   ensureGhost()
   drag.frame = button
   local size = layoutInfo.cellWidth
@@ -432,6 +442,7 @@ local function endDrag()
   local button = drag.frame
   if not button then return end
   local slot = slotUnderCursor()
+  dragLog("%s: drop on %s", MBT.Collector.LabelOf(button) or "?", slot and (slot.kind .. " " .. slot.index) or "nothing")
   drag.frame = nil
   drag.ghost:Hide()
   drag.hint:Hide()
