@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: MinimapButtonTray
+## Notes: Gathers the minimap buttons of your addons into one tray that opens from a single button. Works on every client.
+## Author: Kuro
+## Version: @project-version@
+## SavedVariables: MinimapButtonTrayDB
+## IconTexture: Interface\AddOns\MinimapButtonTray\Media\MinimapButtonTray.tga
+## X-Website: https://github.com/WoWAddons-Kuro/MinimapButtonTray
+## X-Category: Interface Enhancements
+
+Client.lua
+Core.lua
+Collector.lua
+Tray.lua
+Options.lua

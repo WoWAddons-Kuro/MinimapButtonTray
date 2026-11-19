@@ -1,6 +1,4 @@
 ## Interface: 16001
-## Interface-Camelot: 16001
-## Interface-Classic: 11509
 ## Title: MinimapButtonTray
 ## Notes: Gathers the minimap buttons of your addons into one tray that opens from a single button. Works on every client.
 ## Author: Kuro
