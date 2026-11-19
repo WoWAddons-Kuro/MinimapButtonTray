@@ -146,13 +146,13 @@ Every file declares its `local` state at the top, above all functions (GotJunk l
 
 ## Plan
 
-- [ ] Owner answers Open questions; spec updated
-- [ ] Scaffold repo (`git init`, TOC, .pkgmeta, .gitignore, LICENSE MIT, README, CHANGELOG), delete `MinimapButtonTray.Kuro/`, `PROJECT_STRUCTURE.md` entry
-- [ ] `Client.lua` + `/mbt debug` client dump
-- [ ] `Core.lua`: DB defaults/validation, events, scan scheduling, slash
-- [ ] `Collector.lua`: sources, rules, Grab/Release incl. fade lock, hooks, describe
-- [ ] `Tray.lua`: main button, tray grid, position, poller (close-on-leave + auto-hide), compartment
-- [ ] `Options.lua`
+- [x] Owner answers Open questions; spec updated
+- [x] Scaffold repo (`git init`, TOC, .pkgmeta, .gitignore, LICENSE MIT, README, CHANGELOG), icon TGA, `PROJECT_STRUCTURE.md` entry
+- [x] `Client.lua` + `/mbt debug` client dump
+- [x] `Core.lua`: DB defaults/validation, events, scan scheduling, slash
+- [x] `Collector.lua`: sources, rules, Grab/Release incl. fade lock, hooks, describe
+- [x] `Tray.lua`: main button, tray grid, position, poller (close-on-leave + auto-hide), compartment
+- [x] `Options.lua` — all five files pass `luac -p`; initial commit `5ec7f5a`
 - [ ] In-game: Era — collect LibDBIcon + named buttons, fade stays off, auto-hide, release on untick
 - [ ] In-game: Forever — same, plus no crash with pin addons, compartment hide, Edit Mode minimap move
 - [ ] README/CHANGELOG final, owner sign-off, release via `cmd\release.cmd`

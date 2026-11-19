@@ -252,6 +252,10 @@ local function poll(self, elapsed)
   local step = self.throttle
   self.throttle = 0
 
+  -- A fade that slipped past the locks (a group created after Grab) is undone
+  -- within a tick instead of staying dim until the next layout.
+  MBT.Collector.EnforceAllAlpha()
+
   local db = MBT.db
   if mouseNear() then
     self.awaySeconds = 0

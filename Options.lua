@@ -15,7 +15,7 @@ local optionsCategory, optionsFrame
 local controls = {}           -- widgets with an :Update() method
 local listRows, listEntries = {}, {}
 local listOffset = 0
-local listEmptyText, listRangeText
+local listEmptyText, listRangeText, listScrollbar
 
 -- ---------------------------------------------------------------------------
 -- helpers
@@ -48,6 +48,12 @@ local function drawListRows()
   local maxOffset = math.max(0, #listEntries - LIST_ROWS)
   if listOffset > maxOffset then listOffset = maxOffset end
   if listOffset < 0 then listOffset = 0 end
+  if listScrollbar then
+    listScrollbar:SetMinMaxValues(0, maxOffset)
+    listScrollbar:SetShown(maxOffset > 0)
+    -- Keep the thumb where the list is; OnValueChanged no-ops when equal.
+    if math.floor(listScrollbar:GetValue() + 0.5) ~= listOffset then listScrollbar:SetValue(listOffset) end
+  end
 
   for index, row in ipairs(listRows) do
     local entry = listEntries[listOffset + index]
@@ -84,11 +90,33 @@ end
 local function buildList(parent)
   local list = CreateFrame("Frame", nil, parent)
   list:SetSize(BOX_WIDTH - 2 * PAD, LIST_ROWS * LIST_ROW_HEIGHT + 4)
-  list:EnableMouseWheel(true)
-  list:SetScript("OnMouseWheel", function(_, delta)
-    listOffset = listOffset - delta
-    drawListRows()
+
+  -- The rows are a fixed pool; a plain Slider on the right is the scrollbar
+  -- and drives listOffset. Mouse wheel over the list moves it too.
+  local scrollbar = CreateFrame("Slider", nil, list, "UIPanelScrollBarTemplate")
+  scrollbar:SetPoint("TOPRIGHT", -2, -16)
+  scrollbar:SetPoint("BOTTOMRIGHT", -2, 16)
+  scrollbar:SetMinMaxValues(0, 0)
+  scrollbar:SetValueStep(1)
+  scrollbar:SetObeyStepOnDrag(true)
+  scrollbar:SetValue(0)
+  scrollbar:SetScript("OnValueChanged", function(_, value)
+    value = math.floor(value + 0.5)
+    if value ~= listOffset then
+      listOffset = value
+      drawListRows()
+    end
   end)
+  listScrollbar = scrollbar
+  -- The wheel and drawListRows both go through the slider so its thumb is
+  -- always where the list is.
+  local function scrollBy(delta)
+    scrollbar:SetValue(listOffset - delta)
+  end
+  list:EnableMouseWheel(true)
+  list:SetScript("OnMouseWheel", function(_, delta) scrollBy(delta) end)
+  scrollbar:EnableMouseWheel(true)
+  scrollbar:SetScript("OnMouseWheel", function(_, delta) scrollBy(delta) end)
 
   for index = 1, LIST_ROWS do
     local row = CreateFrame("CheckButton", nil, list, "InterfaceOptionsCheckButtonTemplate")
@@ -312,9 +340,12 @@ local function createOptions()
   listRangeText:SetPoint("TOPRIGHT", -PAD, -PAD)
   listRangeText:SetTextColor(0.6, 0.6, 0.6)
   local hint = buttons:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  hint:SetText("Untick a button to leave it on the minimap. Mouse wheel scrolls. A frame that is not found on its own: /mbt add <name>.")
+  hint:SetWidth(BOX_WIDTH - 2 * PAD - 8)
+  hint:SetJustifyH("LEFT")
+  hint:SetWordWrap(true)
+  hint:SetText("Untick a button to leave it on the minimap. A frame that is not found on its own: /mbt add <name>.")
   hint:SetTextColor(0.6, 0.6, 0.6)
-  buttons:Add(hint, 12, -6, 4)
+  buttons:Add(hint, 24, -6, 4)
   buttons:Add(buildList(buttons), LIST_ROWS * LIST_ROW_HEIGHT + 4, -8, 4)
   local rescan = CreateFrame("Button", nil, buttons, "UIPanelButtonTemplate")
   rescan:SetSize(160, 22)

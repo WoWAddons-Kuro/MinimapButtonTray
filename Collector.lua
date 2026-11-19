@@ -20,7 +20,7 @@ Collector.libHooked = false
 
 local recordByFrame = {}      -- [frame] = what the frame looked like before we took it
 local hookedFrames = {}       -- [frame] = true once Show/Hide hooks are installed (hooks cannot be removed)
-local guardedGroups = {}      -- [animationGroup] = true once its OnPlay is hooked
+local guardedGroups = {}      -- [animationGroup] = { play =, restart = } original methods while locked
 local failedFrames = {}       -- [frame] = true when Grab raised; never retried
 
 -- The real widget methods, taken from a frame nobody touches. Collected
@@ -174,13 +174,13 @@ end
 -- Fade guard. Addons fade their button two ways: calling SetAlpha over time
 -- (UIFrameFadeOut and friends; blocked by the SetAlpha no-op installed in
 -- Grab) and playing an AnimationGroup holding an Alpha animation (LibDBIcon's
--- showOnMouseover); those are stopped here and re-stopped whenever their owner
--- plays them while we hold the frame.
-local function alphaGroupsOf(frame)
-  local groups = {}
-  if type(frame.GetAnimationGroups) ~= "function" then return groups end
-  local ok, list = pcall(function() return { frame:GetAnimationGroups() } end)
-  if not ok then return groups end
+-- showOnMouseover); those are stopped and locked while we hold the frame.
+-- Groups on the frame's regions and child frames count too: some addons
+-- animate the icon texture rather than the button.
+local function collectAlphaGroups(owner, groups)
+  if type(owner) ~= "table" or type(owner.GetAnimationGroups) ~= "function" then return end
+  local ok, list = pcall(function() return { owner:GetAnimationGroups() } end)
+  if not ok then return end
   for _, group in ipairs(list) do
     local okAnims, anims = pcall(function() return { group:GetAnimations() } end)
     if okAnims then
@@ -193,34 +193,61 @@ local function alphaGroupsOf(frame)
       end
     end
   end
+end
+
+local function alphaGroupsOf(frame)
+  local groups = {}
+  collectAlphaGroups(frame, groups)
+  if type(frame.GetRegions) == "function" then
+    local ok, regions = pcall(function() return { frame:GetRegions() } end)
+    if ok then for _, region in ipairs(regions) do collectAlphaGroups(region, groups) end end
+  end
+  if type(frame.GetChildren) == "function" then
+    local ok, children = pcall(function() return { frame:GetChildren() } end)
+    if ok then for _, child in ipairs(children) do collectAlphaGroups(child, groups) end end
+  end
   return groups
 end
 
-local function onFadeGroupPlay(group)
-  local frame = group:GetParent()
-  if frame and recordByFrame[frame] then
-    pcall(group.Stop, group)
-    Original.SetAlpha(frame, 1)
-  end
-end
-
-local function guardFades(frame)
+-- Stops every alpha animation on the frame and locks its Play/Restart with
+-- no-ops: an OnPlay hook would run after the animation had started and show
+-- a frame or two of fade. Newly locked groups are remembered on the record so
+-- Release can unlock them.
+local function guardFades(frame, record)
   for _, group in ipairs(alphaGroupsOf(frame)) do
     pcall(group.Stop, group)
-    if not guardedGroups[group] and type(group.HookScript) == "function" then
-      guardedGroups[group] = true
-      pcall(group.HookScript, group, "OnPlay", onFadeGroupPlay)
+    if not guardedGroups[group] then
+      guardedGroups[group] = { play = rawget(group, "Play"), restart = rawget(group, "Restart") }
+      rawset(group, "Play", noop)
+      rawset(group, "Restart", noop)
+      record.lockedGroups[#record.lockedGroups + 1] = group
     end
   end
   Original.SetAlpha(frame, 1)
 end
 
+local function unguardFades(record)
+  for _, group in ipairs(record.lockedGroups) do
+    local saved = guardedGroups[group]
+    if saved then
+      rawset(group, "Play", saved.play)
+      rawset(group, "Restart", saved.restart)
+      guardedGroups[group] = nil
+    end
+  end
+end
+
 -- Called from the tray layout: a cheap belt-and-braces against anything the
 -- guards above did not see (a group created after Grab, for example).
 function Collector.EnforceAlpha(frame)
-  if not recordByFrame[frame] then return end
+  local record = recordByFrame[frame]
+  if not record then return end
   local alpha = Client.ReadNumber(frame:GetAlpha())
-  if alpha ~= 1 then guardFades(frame) end
+  if alpha ~= 1 then guardFades(frame, record) end
+end
+
+function Collector.EnforceAllAlpha()
+  for _, frame in ipairs(Collector.buttons) do Collector.EnforceAlpha(frame) end
 end
 
 -- ---------------------------------------------------------------------------
@@ -261,6 +288,7 @@ function Collector.Grab(frame, label)
     alpha = Client.ReadNumber(frame:GetAlpha()),
     points = {},
     previousMethods = {},
+    lockedGroups = {},
     dragStart = scriptOf(frame, "OnDragStart"),
     dragStop = scriptOf(frame, "OnDragStop"),
   }
@@ -281,7 +309,7 @@ function Collector.Grab(frame, label)
     record.previousMethods[method] = rawget(frame, method)
     rawset(frame, method, noop)
   end
-  guardFades(frame)
+  guardFades(frame, record)
 
   hookVisibilityOnce(frame)
   record.shown = frame:IsShown() and true or false
@@ -302,6 +330,7 @@ function Collector.Release(frame)
   end
 
   for _, method in ipairs(LOCKED_METHODS) do rawset(frame, method, record.previousMethods[method]) end
+  unguardFades(record)
 
   Original.SetParent(frame, record.parent)
   Original.ClearAllPoints(frame)
