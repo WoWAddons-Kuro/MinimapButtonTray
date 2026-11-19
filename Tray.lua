@@ -17,7 +17,6 @@ local DEFAULT_CELL = 32
 local MAX_CELL = 64
 local PIN_LABEL_GAP = 6      -- between a pinned button and its label
 local PIN_MIN_LABEL = 90     -- so the drop zone is wide enough to hit when empty
-local LEAVE_CLOSE_DELAY = 0.8  -- seconds away before closeOnLeave fires
 local POLL_INTERVAL = 0.1
 local DRAG_ALPHA = 0.4       -- the button being dragged
 local ICON_PATH = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Media\\MinimapButtonTray"
@@ -218,7 +217,42 @@ function Tray.Refresh()
   if cellHeight <= 0 then cellHeight = DEFAULT_CELL end
   cellWidth, cellHeight = math.min(cellWidth, MAX_CELL), math.min(cellHeight, MAX_CELL)
 
-  local anchor = TRAY_ANCHORS[db.direction] or TRAY_ANCHORS.leftdown
+  -- Direction: the configured one, flipped on either axis when the tray
+  -- would run off the screen on that side (a button on the left edge opens
+  -- rightwards; on the bottom edge, upwards). Sizes are estimated from the
+  -- counts before layout; a SetClampedToScreen tray would otherwise slide
+  -- back over the main button.
+  local direction = db.direction
+  do
+    local uiScale = Client.ReadNumber(UIParent:GetEffectiveScale()) or 1
+    local mainScale = Client.ReadNumber(main:GetEffectiveScale()) or 1
+    local screenW = (Client.ReadNumber(GetScreenWidth and GetScreenWidth()) or 1920) * uiScale / mainScale
+    local screenH = (Client.ReadNumber(GetScreenHeight and GetScreenHeight()) or 1080) * uiScale / mainScale
+    local left, right = Client.ReadNumber(main:GetLeft()), Client.ReadNumber(main:GetRight())
+    local bottom, top = Client.ReadNumber(main:GetBottom()), Client.ReadNumber(main:GetTop())
+    if left and right and bottom and top then
+      -- Rough footprint in tray units for the fit test.
+      local total = #grid + (drag.frame and 1 or 0)
+      local perRowEst = math.max(1, db.perRow)
+      local alongN, acrossN = math.min(math.max(total, 1), perRowEst), math.max(1, math.ceil(math.max(total, 1) / perRowEst))
+      local horiz = direction:find("^left") or direction:find("^right")
+      local estW = PADDING * 2 + (horiz and alongN or acrossN) * (cellWidth + SPACING)
+      local estH = PADDING * 2 + (horiz and acrossN or alongN) * (cellHeight + SPACING)
+        + (#pinned > 0 and (#pinned * (cellHeight + SPACING) + SECTION_GAP) or 0)
+      local function flipH(d) return (d:gsub("left", "\0"):gsub("right", "left"):gsub("%z", "right")) end
+      local function flipV(d) return (d:gsub("down", "\0"):gsub("up", "down"):gsub("%z", "up")) end
+      -- Horizontal side the tray extends towards, and whether it fits.
+      local towardsLeft = direction:find("left") ~= nil
+      if towardsLeft and left - GAP - estW < 0 and right + GAP + estW <= screenW then direction = flipH(direction)
+      elseif not towardsLeft and right + GAP + estW > screenW and left - GAP - estW >= 0 then direction = flipH(direction) end
+      local towardsDown = direction:find("down") ~= nil
+      if towardsDown and bottom - GAP - estH < 0 and top + GAP + estH <= screenH then direction = flipV(direction)
+      elseif not towardsDown and top + GAP + estH > screenH and bottom - GAP - estH >= 0 then direction = flipV(direction) end
+    end
+  end
+  Tray.effectiveDirection = direction
+
+  local anchor = TRAY_ANCHORS[direction] or TRAY_ANCHORS.leftdown
   container:ClearAllPoints()
   container:SetPoint(anchor[1], main, anchor[2], anchor[3], anchor[4])
 
@@ -228,10 +262,10 @@ function Tray.Refresh()
   drag.slots = slots
 
   -- Grid geometry. "leftdown": rows fill leftwards, extra rows go down.
-  local primary, second = db.direction:match("^(left)(%a+)$")
-  if not primary then primary, second = db.direction:match("^(right)(%a+)$") end
-  if not primary then primary, second = db.direction:match("^(up)(%a+)$") end
-  if not primary then primary, second = db.direction:match("^(down)(%a+)$") end
+  local primary, second = direction:match("^(left)(%a+)$")
+  if not primary then primary, second = direction:match("^(right)(%a+)$") end
+  if not primary then primary, second = direction:match("^(up)(%a+)$") end
+  if not primary then primary, second = direction:match("^(down)(%a+)$") end
   local horizontal = primary == "left" or primary == "right"
   local fromRight = primary == "left" or second == "left"
   local fromBottom = primary == "up" or second == "up"
@@ -475,7 +509,6 @@ function Tray.Open()
   if not container then return end
   MBT.Collector.Scan(true)   -- a quick look; events do the full search
   Tray.Refresh()
-  container.awaySeconds = 0
   container.idleSeconds = 0
   container:Show()
   paintMainBorder()
@@ -499,8 +532,8 @@ end
 
 -- Polled rather than driven by OnLeave: a collected button's own OnLeave may
 -- not reach us, and moving from one button to the next must not close it.
--- Two timers: awaySeconds (closeOnLeave) and idleSeconds (autoHideSeconds),
--- both reset while the mouse is over the main button or the tray.
+-- idleSeconds counts towards autoHideSeconds; it resets while the mouse is
+-- over the main button or the tray, or a shift-drag is in progress.
 local function poll(self, elapsed)
   if drag.frame then updateDrag() end
 
@@ -515,15 +548,11 @@ local function poll(self, elapsed)
 
   local db = MBT.db
   if mouseNear() or drag.frame then
-    self.awaySeconds = 0
     self.idleSeconds = 0
     return
   end
-  self.awaySeconds = (self.awaySeconds or 0) + step
   self.idleSeconds = (self.idleSeconds or 0) + step
-  if db.closeOnLeave and self.awaySeconds >= LEAVE_CLOSE_DELAY then
-    Tray.Close()
-  elseif db.autoHideSeconds > 0 and self.idleSeconds >= db.autoHideSeconds then
+  if db.autoHideSeconds > 0 and self.idleSeconds >= db.autoHideSeconds then
     Tray.Close()
   end
 end
@@ -597,6 +626,7 @@ function Tray.Init()
     if mouseButton == "RightButton" then MBT.Options.Open() else Tray.Toggle() end
   end)
   main:SetScript("OnDragStart", function(self)
+    if MBT.db.locked then return end
     if GameTooltip then GameTooltip:Hide() end
     self:StartMoving()
   end)

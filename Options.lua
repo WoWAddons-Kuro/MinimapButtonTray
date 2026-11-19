@@ -296,6 +296,10 @@ local function createOptions()
 
   local Tray = MBT.Tray
 
+  -- Lock first, directly under the intro: the thing most often toggled.
+  Place(Check(content, "locked", "Lock the tray button in place",
+    "Stops the button being dragged. The tray still opens and closes as normal."), -14)
+
   -- Section: Layout
   local layout = Section("Layout")
   local growLabel = layout:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -321,16 +325,15 @@ local function createOptions()
 
   -- Section: Behaviour
   local behaviour = Section("Behaviour")
-  behaviour:Add(Slider(behaviour, "MinimapButtonTray_OptionsAutoHide", "autoHideSeconds", 0, MBT.AUTO_HIDE_MAX, 1,
+  behaviour:Add(Slider(behaviour, "MinimapButtonTray_OptionsAutoHide", "autoHideSeconds", 0, MBT.AUTO_HIDE_MAX, MBT.AUTO_HIDE_STEP,
     function(v, short)
-      if short then return tostring(v) end
-      return v == 0 and "Auto-hide the tray: never" or ("Auto-hide the tray after " .. v .. " s without the mouse on it")
+      local text = (v % 1 == 0) and ("%d"):format(v) or ("%.2f"):format(v):gsub("0+$", "")
+      if short then return text end
+      return v == 0 and "Auto-hide the tray: never" or ("Auto-hide the tray after " .. text .. " s without the mouse on it")
     end), 44, -8)
-  behaviour:Add(Check(behaviour, "closeOnLeave", "Close the tray as soon as the mouse leaves it",
-    "Closes about a second after the mouse leaves the tray and the main button. Off: only the auto-hide timer (or a click) closes it."), 26, -8)
   if Client.hasCompartment then
     behaviour:Add(Check(behaviour, "hideCompartment", "Hide Blizzard's addon compartment",
-      "The addon list button on the minimap. Most of its entries are the same addons whose buttons are in the tray.", Tray.ApplyCompartment), 26)
+      "The addon list button on the minimap. Most of its entries are the same addons whose buttons are in the tray.", Tray.ApplyCompartment), 26, -8)
   end
   behaviour:Finish()
 

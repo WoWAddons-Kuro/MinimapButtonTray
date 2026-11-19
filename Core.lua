@@ -30,8 +30,8 @@ local DEFAULTS = {
   perRow = 5,               -- 1..12
   scale = 1,                -- main button and tray, 0.5..2
   buttonScale = 1,          -- collected buttons, on top of scale, 0.5..2
-  autoHideSeconds = 15,     -- idle seconds before the tray closes itself; 0 = never; 0..60
-  closeOnLeave = false,     -- close shortly after the mouse leaves the tray and the main button
+  autoHideSeconds = 5,      -- idle seconds before the tray closes itself; 0 = never; 0..15 in 0.25 steps
+  locked = false,           -- the main button cannot be dragged
   hideCompartment = false,  -- hide Blizzard's addon compartment (clients that have one)
   posX = nil,               -- main button centre offset from the minimap centre, UIParent units
   posY = nil,               -- nil = default spot on the ring
@@ -42,8 +42,10 @@ local DEFAULTS = {
 }
 MBT.DEFAULTS = DEFAULTS
 
-local AUTO_HIDE_MAX = 60
+local AUTO_HIDE_MAX = 15
+local AUTO_HIDE_STEP = 0.25
 MBT.AUTO_HIDE_MAX = AUTO_HIDE_MAX
+MBT.AUTO_HIDE_STEP = AUTO_HIDE_STEP
 
 local db
 local loggedIn = false
@@ -111,7 +113,7 @@ function MBT.InitDatabase()
   saved.perRow = clamp(math.floor(saved.perRow + 0.5), 1, 12)
   saved.scale = clamp(saved.scale, 0.5, 2)
   saved.buttonScale = clamp(saved.buttonScale, 0.5, 2)
-  saved.autoHideSeconds = clamp(math.floor(saved.autoHideSeconds + 0.5), 0, AUTO_HIDE_MAX)
+  saved.autoHideSeconds = clamp(math.floor(saved.autoHideSeconds / AUTO_HIDE_STEP + 0.5) * AUTO_HIDE_STEP, 0, AUTO_HIDE_MAX)
   if type(saved.posX) ~= "number" or type(saved.posY) ~= "number" then
     saved.posX, saved.posY = nil, nil
   end
@@ -277,7 +279,7 @@ commands.status = function()
   print("  Buttons collected: " .. #MBT.Collector.buttons)
   print("  Layout: " .. MBT.DirectionLabel(db.direction) .. ", " .. db.perRow .. " per row")
   print("  Auto-hide: " .. (db.autoHideSeconds > 0 and (db.autoHideSeconds .. " s idle") or "never"))
-  print("  Close when the mouse leaves: " .. yesNo(db.closeOnLeave))
+  print("  Button locked: " .. yesNo(db.locked))
   if Client.hasCompartment then print("  Hide the addon compartment: " .. yesNo(db.hideCompartment)) end
 end
 

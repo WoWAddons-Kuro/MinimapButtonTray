@@ -36,8 +36,9 @@ Key constraints learned the hard way on these clients:
 | Client abstraction | `Client.lua` builds **one** `MBT.Client` table at load: `flavour` (`"era"`/`"forever"`/`"mainline"`/`"other"`), capability flags and shims (below). Every file reads APIs through `MBT.Client`, never `_G` directly, where the two clients differ. `/mbt debug` prints the table. |
 | Enumeration | `_G` name scan on **all** flavours (the Era-safe `GetChildren()` buys nothing: unnamed frames fail the name rules anyway). One code path, one set of bugs. |
 | Fade fix | Collected buttons never fade: lock `SetAlpha` (no-op while held), force alpha 1 via the original method, stop any `AnimationGroup` on the frame whose animations target alpha (LibDBIcon `showOnMouseover` uses `button.fadeOut`), hook its `OnPlay` to `Stop()` while collected. Re-assert alpha 1 in layout refresh. Restore recorded alpha on release. |
-| Auto-hide | `db.autoHideSeconds` (default 15, 0–60, 0 = never). **Idle** timer: reset while mouse is over the main button or the tray; counted in the tray's `OnUpdate` poller (same one that drives mouse-leave close). |
-| Mouse-leave close | Kept as a separate option `db.closeOnLeave` (default false, 0.8 s grace), polled, not OnLeave-driven (a collected button's OnLeave is not ours). |
+| Auto-hide | `db.autoHideSeconds` (default 5, 0–15 in 0.25 steps, 0 = never). **Idle** timer: reset while mouse is over the main button or the tray; counted in the tray's `OnUpdate` poller (same one that drives mouse-leave close). |
+| Screen edges | The configured grow direction is flipped per axis when the estimated tray would run off that side of the screen and fits on the other (button on the left edge opens rightwards, on the bottom edge opens upwards). The tray never covers the main button. `Tray.effectiveDirection` is what was used. |
+| Lock | `db.locked` (default false): the main button ignores drag. First control on the options page. |
 | Options UI | Blizzard Settings panel: `Settings.RegisterCanvasLayoutCategory` when `Client.hasSettingsAPI`, else `InterfaceOptions_AddCategory`. Sections: *Layout*, *Behaviour*, *Buttons* (tick list: collected / ignored). Right-click on the main button and `/mbt` open it. |
 | DB | Account-wide `MinimapButtonTrayDB`, validated key by key against defaults at login (bad/old values fall back individually). No per-character data. |
 
@@ -119,8 +120,8 @@ open (name scan throttled to once per 5 s), `/mbt rescan`. Combat: scans are def
 | `perRow` | 5 | 1–12 |
 | `scale` | 1 | main button + tray, 0.5–2 |
 | `buttonScale` | 1 | collected buttons, 0.5–2 |
-| `autoHideSeconds` | 15 | idle seconds before the tray closes itself; 0 = never; slider 0–60 step 1 |
-| `closeOnLeave` | false | close 0.8 s after the mouse leaves main+tray |
+| `autoHideSeconds` | 5 | idle seconds before the tray closes itself; 0 = never; slider 0–15 step 0.25 |
+| `locked` | false | main button cannot be dragged |
 | `hideCompartment` | false | only shown when the client has one |
 | `posX`, `posY` | nil | main button offset from minimap centre; nil = default (bottom-left of the ring) |
 | `ignore` | `{}` | `[frameName] = true` never collected |
