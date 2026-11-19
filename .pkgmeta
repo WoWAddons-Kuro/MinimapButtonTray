@@ -1,0 +1,15 @@
+package-as: MinimapButtonTray
+
+enable-nolib-creation: no
+enable-toc-creation: yes
+
+manual-changelog: CHANGELOG.md
+
+ignore:
+  - README.md
+  - SPEC.md
+  - Assets
+  - Media/MinimapButtonTray_256.png
+  - .github
+  - .gitignore
+  - .pkgmeta
