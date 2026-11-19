@@ -155,7 +155,8 @@ Every file declares its `local` state at the top, above all functions (GotJunk l
 - [x] `Collector.lua`: sources, rules, Grab/Release incl. fade lock, hooks, describe
 - [x] `Tray.lua`: main button, tray grid, position, poller (close-on-leave + auto-hide), compartment
 - [x] `Options.lua` — all five files pass `luac -p`; initial commit `5ec7f5a`
-- [ ] In-game: Era — collect LibDBIcon + named buttons, fade stays off, auto-hide, release on untick
+- [x] In-game: Era — collect LibDBIcon + named buttons, fade stays off, auto-hide, options list; shift-drag reorder + pin verified 2026-11-19
+- [ ] In-game: Era — release on untick (put back exactly where it was)
 - [ ] In-game: Forever — same, plus no crash with pin addons, compartment hide, Edit Mode minimap move
 - [ ] README/CHANGELOG final, owner sign-off, release via `cmd\release.cmd`
 
