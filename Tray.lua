@@ -67,10 +67,14 @@ local function paint(texture, color)
 end
 
 -- Flat background plus a 1px border; returns the border textures.
-local function frameBox(frame)
-  local background = frame:CreateTexture(nil, "BACKGROUND")
-  paint(background, BACKGROUND)
-  background:SetAllPoints()
+-- Flat background plus a 1px border; returns the border textures. The main
+-- button passes noBackground: only its icon shows, the border is hover-only.
+local function frameBox(frame, noBackground)
+  if not noBackground then
+    local background = frame:CreateTexture(nil, "BACKGROUND")
+    paint(background, BACKGROUND)
+    background:SetAllPoints()
+  end
   local borders = {}
   for _, edge in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
     local line = frame:CreateTexture(nil, "BORDER")
@@ -91,8 +95,10 @@ end
 
 local function paintMainBorder()
   local open = container and container:IsShown()
-  local color = (open or (main and main.hover)) and BORDER_OPEN or BORDER
-  for _, line in ipairs(mainBorders) do paint(line, color) end
+  -- No border at rest: the icon stands on its own. Blue while hovered or
+  -- while the tray is open, as the "this is the active thing" cue.
+  local show = open or (main and main.hover)
+  for _, line in ipairs(mainBorders) do line:SetShown(show and true or false); if show then paint(line, BORDER_OPEN) end end
 end
 
 -- ---------------------------------------------------------------------------
@@ -611,12 +617,11 @@ function Tray.Init()
   main:EnableMouse(true)
   main:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   main:RegisterForDrag("LeftButton")
-  mainBorders = frameBox(main)
+  mainBorders = frameBox(main, true)
 
   local icon = main:CreateTexture(nil, "ARTWORK")
   icon:SetTexture(ICON_PATH)
-  icon:SetPoint("TOPLEFT", 2, -2)
-  icon:SetPoint("BOTTOMRIGHT", -2, 2)
+  icon:SetAllPoints()
   main.icon = icon
   local highlight = main:CreateTexture(nil, "HIGHLIGHT")
   highlight:SetColorTexture(1, 1, 1, 0.12)
