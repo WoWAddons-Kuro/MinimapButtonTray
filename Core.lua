@@ -30,7 +30,7 @@ local DEFAULTS = {
   perRow = 5,               -- 1..12
   scale = 1,                -- main button and tray, 0.5..2
   buttonScale = 1,          -- collected buttons, on top of scale, 0.5..2
-  autoHideSeconds = 5,      -- idle seconds before the tray closes itself; 0 = never; 0..15 in 0.25 steps
+  autoHideSeconds = 0.75,      -- idle seconds before the tray closes itself; 0 = never; 0..3 in 0.25 steps
   locked = false,           -- the main button cannot be dragged
   hideCompartment = false,  -- hide Blizzard's addon compartment (clients that have one)
   posX = nil,               -- main button centre offset from the minimap centre, UIParent units
@@ -42,7 +42,7 @@ local DEFAULTS = {
 }
 MBT.DEFAULTS = DEFAULTS
 
-local AUTO_HIDE_MAX = 15
+local AUTO_HIDE_MAX = 3
 local AUTO_HIDE_STEP = 0.25
 MBT.AUTO_HIDE_MAX = AUTO_HIDE_MAX
 MBT.AUTO_HIDE_STEP = AUTO_HIDE_STEP

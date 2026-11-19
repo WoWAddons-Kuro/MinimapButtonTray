@@ -19,7 +19,7 @@ not open-licensed, so they could not be fixed. This one is MIT.
 - Collects LibDBIcon buttons and every named addon button sitting on the minimap. Blizzard's own
   buttons, map pins and protected frames are left alone.
 - Collected buttons **never fade out** while in the tray, whatever their addon thinks.
-- Tray **auto-hides** after a configurable idle time (default 5 s, 0 = never, 0.25 s steps up to 15 s).
+- Tray **auto-hides** after a configurable idle time (default 0.75 s, 0 = never, 0.25 s steps up to 3 s).
 - Grid grows in any of eight directions, N buttons per row, separate scale for the tray and the buttons.
 - **Shift-drag** a button to reorder the grid, or drop it on the zone under the grid to **pin** it as a
   labelled row — `[button] Addon Name` — so the handful you use every day are not a hunting session.
