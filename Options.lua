@@ -96,10 +96,9 @@ local function buildList(parent)
   local scrollbar = CreateFrame("Slider", nil, list, "UIPanelScrollBarTemplate")
   scrollbar:SetPoint("TOPRIGHT", -2, -16)
   scrollbar:SetPoint("BOTTOMRIGHT", -2, 16)
-  scrollbar:SetMinMaxValues(0, 0)
-  scrollbar:SetValueStep(1)
-  scrollbar:SetObeyStepOnDrag(true)
-  scrollbar:SetValue(0)
+  -- Replace the template's handlers first: they expect the parent to be a
+  -- ScrollFrame (self:GetParent():SetVerticalScroll) and raise on ours.
+  scrollbar:SetScript("OnMinMaxChanged", nil)
   scrollbar:SetScript("OnValueChanged", function(_, value)
     value = math.floor(value + 0.5)
     if value ~= listOffset then
@@ -107,6 +106,10 @@ local function buildList(parent)
       drawListRows()
     end
   end)
+  scrollbar:SetMinMaxValues(0, 0)
+  scrollbar:SetValueStep(1)
+  scrollbar:SetObeyStepOnDrag(true)
+  scrollbar:SetValue(0)
   listScrollbar = scrollbar
   -- The wheel and drawListRows both go through the slider so its thumb is
   -- always where the list is.
