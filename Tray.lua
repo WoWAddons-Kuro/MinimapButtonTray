@@ -26,6 +26,7 @@ local BORDER = { 0.25, 0.45, 0.55, 1 }
 local BORDER_OPEN = { 0.40, 0.80, 1, 1 }
 local DROP_HINT = { 0.40, 0.80, 1, 0.35 }
 local PIN_ZONE = { 0.40, 0.80, 1, 0.10 }
+local ROW_HIGHLIGHT = { 1, 1, 1, 0.08 }   -- pinned row under the mouse
 
 -- Where the tray sits against the main button, per direction.
 local TRAY_ANCHORS = {
@@ -47,6 +48,7 @@ local compartmentHooked, compartmentHidden = false, false
 local pinZone                -- frame under the grid; visible when pins exist or a drag is on
 local pinZoneLabel           -- "drop here to pin" while empty
 local pinLabels = {}         -- FontStrings, one per pinned row, reused
+local pinRowFrames = {}      -- click-catching Buttons, one per pinned row, reused
 
 -- Drag state.
 local drag = {
@@ -196,6 +198,41 @@ local function pinLabel(index)
     pinLabels[index] = label
   end
   return label
+end
+
+-- Forwards a click on a pinned row to the button sitting in it, as if the
+-- button itself had been clicked. Buttons that only react to OnMouseUp or
+-- OnMouseDown (no OnClick) get those instead.
+local function forwardClick(target, mouseButton)
+  if not target or not target:IsShown() then return end
+  if not MBT.Collector.IsCollected(target) then return end
+  local onClick = target:GetScript("OnClick")
+  if onClick then
+    local ok, err = pcall(onClick, target, mouseButton, false)
+    if not ok then MBT.Print("click on %s failed: %s", MBT.Collector.LabelOf(target) or "?", tostring(err)) end
+    return
+  end
+  local onDown, onUp = target:GetScript("OnMouseDown"), target:GetScript("OnMouseUp")
+  if onDown then pcall(onDown, target, mouseButton) end
+  if onUp then pcall(onUp, target, mouseButton) end
+end
+
+-- One click-catching frame per pinned row, under the button (so the button
+-- itself still gets its own clicks and tooltip) and above the tray background.
+local function pinRowFrame(index)
+  local row = pinRowFrames[index]
+  if not row then
+    row = CreateFrame("Button", nil, container)
+    row:SetFrameLevel(container:GetFrameLevel() + 1)
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
+    row.highlight = row:CreateTexture(nil, "HIGHLIGHT")
+    paint(row.highlight, ROW_HIGHLIGHT)
+    row.highlight:SetAllPoints()
+    row:SetScript("OnClick", function(self, mouseButton) forwardClick(self.target, mouseButton) end)
+    row:Hide()
+    pinRowFrames[index] = row
+  end
+  return row
 end
 
 -- Lays out the grid section and the pinned section, sizes the tray, and
@@ -351,6 +388,7 @@ function Tray.Refresh()
 
   -- Pinned section.
   for index = pinCount + 1, #pinLabels do pinLabels[index]:Hide() end
+  for index = pinCount + 1, #pinRowFrames do pinRowFrames[index].target = nil; pinRowFrames[index]:Hide() end
   if showPins then
     ensurePinZone()
     local zoneTop = gridTop + gridHeight + sectionGap
@@ -362,6 +400,12 @@ function Tray.Refresh()
     pinZone:Show()
     for index, button in ipairs(pinned) do
       local rowTop = zoneTop + (index - 1) * (pinRowHeight + SPACING)
+      local row = pinRowFrame(index)
+      row.target = button
+      row:ClearAllPoints()
+      row:SetPoint("TOPLEFT", container, "TOPLEFT", PADDING, -rowTop)
+      row:SetSize(innerWidth, pinRowHeight)
+      row:Show()
       placeButton(button, PADDING + cellWidth / 2, rowTop + pinRowHeight / 2)
       local label = pinLabel(index)
       label:ClearAllPoints()
