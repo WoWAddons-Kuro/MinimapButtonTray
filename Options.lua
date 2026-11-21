@@ -338,6 +338,9 @@ local function createOptions()
     behaviour:Add(Check(behaviour, "hideCompartment", "Hide Blizzard's addon compartment",
       "The addon list button on the minimap. Most of its entries are the same addons whose buttons are in the tray.", Tray.ApplyCompartment), 26, -8)
   end
+  behaviour:Add(Check(behaviour, "showHidden", "Show buttons their addon has hidden",
+    "An addon's own 'hide minimap icon' option (often a modified click on the icon) normally hides it from the tray too. "
+    .. "Tick to keep every collected button visible in the tray regardless.", MBT.Collector.ApplyShowHidden), 26, -8)
   behaviour:Finish()
 
   -- Section: Buttons

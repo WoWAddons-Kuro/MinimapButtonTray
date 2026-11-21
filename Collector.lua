@@ -29,7 +29,12 @@ local Original = {}
 local LOCKED_METHODS = { "SetPoint", "ClearAllPoints", "SetParent", "SetScale", "SetAllPoints", "SetAlpha" }
 for _, method in ipairs(LOCKED_METHODS) do Original[method] = UIParent[method] end
 Original.SetScript = UIParent.SetScript   -- wrapped (not no-op'd) on held frames, see Grab
+Original.Show, Original.Hide = UIParent.Show, UIParent.Hide   -- wrapped on held frames, see Grab
 Collector.Original = Original
+
+-- Click handlers that are wrapped on a held frame so Alt-clicks (the reorder
+-- modifier) never reach the addon.
+local CLICK_SCRIPTS = { "OnClick", "OnMouseDown", "OnMouseUp", "OnDoubleClick" }
 
 local function noop() end
 
@@ -243,7 +248,7 @@ end
 function Collector.EnforceAlpha(frame)
   local record = recordByFrame[frame]
   if not record then return end
-  -- The tray dims the button it is shift-dragging; that alpha is the tray's.
+  -- The tray dims the button it is Alt-dragging; that alpha is the tray's.
   if MBT.Tray.DraggedButton and MBT.Tray.DraggedButton() == frame then return end
   local alpha = Client.ReadNumber(frame:GetAlpha())
   if alpha ~= 1 then guardFades(frame, record) end
@@ -294,6 +299,8 @@ function Collector.Grab(frame, label)
     lockedGroups = {},
     dragStart = scriptOf(frame, "OnDragStart"),
     dragStop = scriptOf(frame, "OnDragStop"),
+    clickScripts = {},         -- [which] = the addon's handler, run unless Alt is held
+    addonShown = frame:IsShown() and true or false,   -- what the addon wants; we may override (db.showHidden)
   }
   local count = Client.ReadNumber(frame:GetNumPoints()) or 0
   for index = 1, count do record.points[index] = { frame:GetPoint(index) } end
@@ -305,7 +312,7 @@ function Collector.Grab(frame, label)
   if Client.hasIgnoreParentScale then pcall(frame.SetIgnoreParentScale, frame, false) end
   Original.SetScale(frame, MBT.db.buttonScale)
   -- The addon's own drag handlers would move the button around the minimap
-  -- ring; ours only act on a shift-drag (reorder / pin inside the tray).
+  -- ring; ours only act on an Alt-drag (reorder / pin inside the tray).
   pcall(Original.SetScript, frame, "OnDragStart", MBT.Tray.OnButtonDragStart)
   pcall(Original.SetScript, frame, "OnDragStop", MBT.Tray.OnButtonDragStop)
   -- Addons (LibDBIcon:Refresh, :Unlock, lock toggles) re-set their drag
@@ -326,6 +333,32 @@ function Collector.Grab(frame, label)
   if type(frame.RegisterForDrag) == "function" then
     pcall(frame.RegisterForDrag, frame, "LeftButton")
   end
+  -- Alt is the reorder/pin modifier. While it is held, every click on a held
+  -- button is ours: the addon's handler never runs (many addons bind a
+  -- modified click to "hide my minimap icon", which is exactly what a short
+  -- drag used to trigger).
+  for _, which in ipairs(CLICK_SCRIPTS) do
+    local handler = scriptOf(frame, which)
+    if handler then
+      record.clickScripts[which] = handler
+      pcall(Original.SetScript, frame, which, function(self, ...)
+        if IsAltKeyDown() then return end
+        return handler(self, ...)
+      end)
+    end
+  end
+  -- The addon's own Show/Hide still decide visibility, unless db.showHidden
+  -- forces hidden buttons to show. Record the addon's wish via the secure
+  -- hooks (onVisibilityChanged) and re-apply ours afterwards.
+  -- Hook the real methods first (hooks cannot be removed and must not wrap
+  -- the per-grab closures below), then install the wrappers.
+  hookVisibilityOnce(frame)
+  record.previousMethods.Show = rawget(frame, "Show")
+  record.previousMethods.Hide = rawget(frame, "Hide")
+  record.previousMethods.SetShown = rawget(frame, "SetShown")
+  rawset(frame, "Show", function(self) record.addonShown = true; Original.Show(self); onVisibilityChanged(self) end)
+  rawset(frame, "Hide", function(self) record.addonShown = false; if not MBT.db.showHidden then Original.Hide(self) end; onVisibilityChanged(self) end)
+  rawset(frame, "SetShown", function(self, shown) if shown then self:Show() else self:Hide() end end)
 
   for _, method in ipairs(LOCKED_METHODS) do
     record.previousMethods[method] = rawget(frame, method)
@@ -337,6 +370,26 @@ function Collector.Grab(frame, label)
   record.shown = frame:IsShown() and true or false
   recordByFrame[frame] = record
   Collector.buttons[#Collector.buttons + 1] = frame
+  if MBT.db.showHidden and not record.addonShown then Original.Show(frame) end
+end
+
+-- db.showHidden: a button its addon has hidden is shown in the tray anyway
+-- (the addon's "hide my minimap icon" is usually a hide-from-the-ring option,
+-- which the tray makes moot). Off: back to what each addon wants.
+function Collector.ApplyShowHidden()
+  for _, frame in ipairs(Collector.buttons) do
+    local record = recordByFrame[frame]
+    if not record.addonShown then
+      if MBT.db.showHidden then Original.Show(frame) else Original.Hide(frame) end
+    end
+  end
+  MBT.Tray.Refresh()
+end
+
+-- true when the addon itself has hidden the button (whatever the tray shows).
+function Collector.HiddenByAddon(frame)
+  local record = recordByFrame[frame]
+  return record ~= nil and not record.addonShown
 end
 
 -- Puts a button back exactly where its addon left it.
@@ -352,6 +405,7 @@ function Collector.Release(frame)
   end
 
   for _, method in ipairs(LOCKED_METHODS) do rawset(frame, method, record.previousMethods[method]) end
+  for _, method in ipairs({ "Show", "Hide", "SetShown" }) do rawset(frame, method, record.previousMethods[method]) end
   unguardFades(record)
 
   Original.SetParent(frame, record.parent)
@@ -362,6 +416,9 @@ function Collector.Release(frame)
   restack(frame, record.strata, record.level, record.fixedStrata, record.fixedLevel)
   pcall(frame.SetScript, frame, "OnDragStart", record.dragStart)
   pcall(frame.SetScript, frame, "OnDragStop", record.dragStop)
+  for which, handler in pairs(record.clickScripts) do pcall(Original.SetScript, frame, which, handler) end
+  -- Back to what the addon wanted, in case showHidden had it forced on.
+  if record.addonShown then Original.Show(frame) else Original.Hide(frame) end
   return true
 end
 
@@ -559,7 +616,7 @@ function Collector.Uninclude(path)
 end
 
 -- ---------------------------------------------------------------------------
--- grid order and pins (shift-drag in the tray)
+-- grid order and pins (Alt-drag in the tray)
 -- ---------------------------------------------------------------------------
 local function indexIn(list, name)
   for index, entry in ipairs(list) do
@@ -579,34 +636,47 @@ function Collector.IsPinned(frame)
   return record ~= nil and indexIn(MBT.db.pinned, record.name) ~= nil
 end
 
--- Collected, unpinned buttons in grid order: db.order first (names that are
--- collected right now), then the rest alphabetically.
-function Collector.GridButtons()
-  local byName, placed, result = {}, {}, {}
-  for _, frame in ipairs(Collector.buttons) do
-    if not Collector.IsPinned(frame) then byName[recordByFrame[frame].name] = frame end
-  end
-  for _, name in ipairs(MBT.db.order) do
-    local frame = byName[name]
-    if frame and not placed[frame] then
-      placed[frame] = true
-      result[#result + 1] = frame
+-- Collected pinned buttons in db.pinned order. Each frame appears once; a
+-- name listed twice, or two frames sharing a name, cannot drop one of them.
+function Collector.PinnedButtons()
+  local result, placed = {}, {}
+  for _, name in ipairs(MBT.db.pinned) do
+    for _, frame in ipairs(Collector.buttons) do
+      if not placed[frame] and recordByFrame[frame].name == name then
+        placed[frame] = true
+        result[#result + 1] = frame
+      end
     end
-  end
-  for _, frame in ipairs(Collector.buttons) do   -- already sorted by name
-    if byName[recordByFrame[frame].name] and not placed[frame] then result[#result + 1] = frame end
   end
   return result
 end
 
--- Collected pinned buttons in db.pinned order.
-function Collector.PinnedButtons()
-  local result = {}
-  for _, name in ipairs(MBT.db.pinned) do
-    local frame = Collector.Find(name)
-    if frame then result[#result + 1] = frame end
+-- Everything collected that is not a pinned row, in grid order: db.order
+-- first, then the rest alphabetically. Defined as the complement of
+-- PinnedButtons so no collected button can be in neither list.
+function Collector.GridButtons()
+  local pinned, placed, result = {}, {}, {}
+  for _, frame in ipairs(Collector.PinnedButtons()) do pinned[frame] = true end
+  for _, name in ipairs(MBT.db.order) do
+    for _, frame in ipairs(Collector.buttons) do
+      if not pinned[frame] and not placed[frame] and recordByFrame[frame].name == name then
+        placed[frame] = true
+        result[#result + 1] = frame
+      end
+    end
+  end
+  for _, frame in ipairs(Collector.buttons) do   -- already sorted by name
+    if not pinned[frame] and not placed[frame] then result[#result + 1] = frame end
   end
   return result
+end
+
+-- Keeps a name list free of duplicates (first occurrence wins).
+local function dedupe(list)
+  local seen, index = {}, 1
+  while index <= #list do
+    if seen[list[index]] then table.remove(list, index) else seen[list[index]] = true; index = index + 1 end
+  end
 end
 
 -- Puts the button at gridIndex of the grid (1-based; nil = last), unpinning
@@ -615,7 +685,7 @@ end
 function Collector.MoveToGrid(frame, gridIndex)
   local record = recordByFrame[frame]
   if not record then return end
-  removeFrom(MBT.db.pinned, record.name)
+  while removeFrom(MBT.db.pinned, record.name) do end
   local grid = Collector.GridButtons()
   for index, other in ipairs(grid) do
     if other == frame then table.remove(grid, index) break end
@@ -624,6 +694,7 @@ function Collector.MoveToGrid(frame, gridIndex)
   local order = {}
   for index, other in ipairs(grid) do order[index] = recordByFrame[other].name end
   MBT.db.order = order
+  dedupe(MBT.db.order)
   MBT.Tray.Refresh()
 end
 
@@ -631,10 +702,25 @@ end
 function Collector.MoveToPinned(frame, pinIndex)
   local record = recordByFrame[frame]
   if not record then return end
-  removeFrom(MBT.db.pinned, record.name)
-  removeFrom(MBT.db.order, record.name)
+  while removeFrom(MBT.db.pinned, record.name) do end
+  while removeFrom(MBT.db.order, record.name) do end
   table.insert(MBT.db.pinned, MBT.Clamp(pinIndex or (#MBT.db.pinned + 1), 1, #MBT.db.pinned + 1), record.name)
+  dedupe(MBT.db.pinned)
   MBT.Tray.Refresh()
+end
+
+-- Run at login: the two name lists must be arrays of unique strings with no
+-- name in both. Anything else is dropped (the button then simply sorts
+-- alphabetically in the grid, which is never lost).
+function Collector.SanitiseLists()
+  local db = MBT.db
+  for _, key in ipairs({ "order", "pinned" }) do
+    local clean = {}
+    for _, name in ipairs(db[key]) do if type(name) == "string" then clean[#clean + 1] = name end end
+    db[key] = clean
+    dedupe(db[key])
+  end
+  for _, name in ipairs(db.pinned) do while removeFrom(db.order, name) do end end
 end
 
 -- Human label for a frame name: library prefixes and the usual button
@@ -686,13 +772,13 @@ function Collector.Describe()
   for _, frame in ipairs(Collector.buttons) do
     local alpha = Client.ReadNumber(frame:GetAlpha())
     -- Drag diagnostics: whose OnDragStart is on the frame right now (ours is
-    -- needed for shift-drag), and does it take the mouse at all.
+    -- needed for Alt-drag), and does it take the mouse at all.
     local dragHandler = scriptOf(frame, "OnDragStart")
     local dragState = dragHandler == MBT.Tray.OnButtonDragStart and "drag ours"
       or (dragHandler and "|cffff6666drag theirs|r") or "|cffff6666drag none|r"
     local mouse = flag(frame, "IsMouseEnabled") and "" or ", |cffff6666mouse off|r"
     lines[#lines + 1] = "|cff00ff00collected|r " .. recordByFrame[frame].name
-      .. (frame:IsShown() and "" or " (hidden by its addon)")
+      .. (Collector.HiddenByAddon(frame) and (MBT.db.showHidden and " (hidden by its addon, shown anyway)" or " (hidden by its addon)") or "")
       .. ((alpha and alpha < 1) and (" |cffff6666alpha " .. alpha .. "|r") or "")
       .. "  [" .. dragState .. mouse .. "]"
   end

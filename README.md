@@ -21,7 +21,7 @@ not open-licensed, so they could not be fixed. This one is MIT.
 - Collected buttons **never fade out** while in the tray, whatever their addon thinks.
 - Tray **auto-hides** after a configurable idle time (default 0.75 s, 0 = never, 0.25 s steps up to 3 s).
 - Grid grows in any of eight directions, N buttons per row, separate scale for the tray and the buttons.
-- **Shift-drag** a button to reorder the grid, or drop it on the zone under the grid to **pin** it as a
+- **Alt-drag** a button to reorder the grid, or drop it on the zone under the grid to **pin** it as a
   labelled row — `[button] Addon Name` — so the handful you use every day are not a hunting session.
   Drag a pinned button back to the grid to unpin it.
 - Untick a button in the options to leave it on the minimap; it goes back exactly where it was.
@@ -34,7 +34,7 @@ not open-licensed, so they could not be fixed. This one is MIT.
 | Left | open / close the tray |
 | Right | options |
 | Drag | move the button |
-| Shift-drag a collected button | reorder, or pin / unpin |
+| Alt-drag a collected button | reorder, or pin / unpin |
 
 ## Slash `/mbt`
 

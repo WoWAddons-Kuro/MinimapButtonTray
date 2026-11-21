@@ -33,11 +33,12 @@ local DEFAULTS = {
   autoHideSeconds = 0.75,      -- idle seconds before the tray closes itself; 0 = never; 0..3 in 0.25 steps
   locked = false,           -- the main button cannot be dragged
   hideCompartment = false,  -- hide Blizzard's addon compartment (clients that have one)
+  showHidden = false,       -- show buttons their addon has hidden (a "hide minimap icon" option) in the tray anyway
   posX = nil,               -- main button centre offset from the minimap centre, UIParent units
   posY = nil,               -- nil = default spot on the ring
   ignore = {},              -- [frameName] = true, never collected
   include = {},             -- [framePath] = true, always collected ("Frame" or "Frame.child")
-  order = {},               -- array of names: grid order after shift-drag; unlisted sort alphabetically after
+  order = {},               -- array of names: grid order after Alt-drag; unlisted sort alphabetically after
   pinned = {},              -- array of names: shown as [button] [name] rows under the grid
 }
 MBT.DEFAULTS = DEFAULTS
@@ -61,6 +62,12 @@ local function Print(fmt, ...)
   print(CHAT_PREFIX .. fmt)
 end
 MBT.Print = Print
+
+-- A visible start marker for multi-line command output, easy to find in the
+-- chat log when copying it.
+local function Heading(label)
+  print("|cff66ccff====== " .. label .. " ======|r")
+end
 
 function MBT.DirectionLabel(direction)
   return DIRECTION_LABELS[direction] or tostring(direction)
@@ -142,6 +149,7 @@ end
 local function onLogin()
   MBT.InitDatabase()
   loggedIn = true
+  MBT.Collector.SanitiseLists()
   MBT.Tray.Init()
   MBT.Tray.ApplyCompartment()
   MBT.Options.Init()
@@ -210,13 +218,21 @@ commands.hide = function() MBT.Tray.Close() end
 commands.list = function()
   local Collector = MBT.Collector
   Collector.Scan()
+  Heading("/mbt list")
   if #Collector.buttons == 0 then
     Print("No minimap button collected")
   else
-    Print("Collected buttons (%d):", #Collector.buttons)
+    local hidden = 0
+    for _, button in ipairs(Collector.buttons) do if Collector.HiddenByAddon(button) then hidden = hidden + 1 end end
+    Print("Collected buttons (%d%s):", #Collector.buttons, hidden > 0 and (", " .. hidden .. " hidden by their addon") or "")
     for _, button in ipairs(Collector.buttons) do
       local name = Collector.LabelOf(button) or "?"
-      print("  " .. name .. (button:IsShown() and "" or "  |cff999999(hidden by its addon)|r"))
+      local note = ""
+      if Collector.HiddenByAddon(button) then
+        note = db.showHidden and "  |cff999999(hidden by its addon, shown anyway)|r"
+          or "  |cffff9900(hidden by its addon - turn its icon back on there, or tick 'Show buttons their addon has hidden' in /mbt options)|r"
+      end
+      print("  " .. name .. note)
     end
   end
   local ignored, included = sortedKeys(db.ignore), sortedKeys(db.include)
@@ -275,6 +291,7 @@ end
 commands.scan = commands.rescan
 
 commands.status = function()
+  Heading("/mbt status")
   Print("v%s on %s (interface %d)", MBT.version, Client.flavour, Client.interface)
   print("  Buttons collected: " .. #MBT.Collector.buttons)
   print("  Layout: " .. MBT.DirectionLabel(db.direction) .. ", " .. db.perRow .. " per row")
@@ -285,6 +302,7 @@ end
 
 -- Everything a missing-button report needs on a new build.
 commands.debug = function()
+  Heading("/mbt debug")
   Print("v%s - client %s build %s", MBT.version, Client.buildVersion, Client.buildNumber)
   for _, line in ipairs(Client.Describe()) do print("  " .. line) end
   print("  LibStub: " .. yesNo(_G.LibStub ~= nil) .. ", LibDBIcon: " .. yesNo(MBT.Collector.GetLibDBIcon() ~= nil))
@@ -293,7 +311,7 @@ end
 
 commands.dragdebug = function()
   MBT.Tray.dragDebug = not MBT.Tray.dragDebug
-  Print("drag debug %s - shift-drag a button and watch the chat", MBT.Tray.dragDebug and "on" or "off")
+  Print("drag debug %s - Alt-drag a button and watch the chat", MBT.Tray.dragDebug and "on" or "off")
 end
 
 commands.help = usage

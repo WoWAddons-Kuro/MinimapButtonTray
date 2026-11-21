@@ -123,10 +123,11 @@ open (name scan throttled to once per 5 s), `/mbt rescan`. Combat: scans are def
 | `autoHideSeconds` | 0.75 | idle seconds before the tray closes itself; 0 = never; slider 0–3 step 0.25 |
 | `locked` | false | main button cannot be dragged |
 | `hideCompartment` | false | only shown when the client has one |
+| `showHidden` | false | a button its addon has hidden (its own "hide minimap icon" option) is shown in the tray anyway; `Grab` wraps `Show/Hide/SetShown` and records the addon's wish in `record.addonShown`, restored on release |
 | `posX`, `posY` | nil | main button offset from minimap centre; nil = default (bottom-left of the ring) |
 | `ignore` | `{}` | `[frameName] = true` never collected |
 | `include` | `{}` | `[path] = true` always collected |
-| `order` | `{}` | array of names: grid order set by shift-drag; unlisted buttons sort alphabetically after |
+| `order` | `{}` | array of names: grid order set by Alt-drag; unlisted buttons sort alphabetically after |
 | `pinned` | `{}` | array of names: shown as `[button] [name]` rows under the grid |
 
 ## Slash `/mbt`
@@ -156,7 +157,7 @@ Every file declares its `local` state at the top, above all functions (GotJunk l
 - [x] `Collector.lua`: sources, rules, Grab/Release incl. fade lock, hooks, describe
 - [x] `Tray.lua`: main button, tray grid, position, poller (close-on-leave + auto-hide), compartment
 - [x] `Options.lua` — all five files pass `luac -p`; initial commit `5ec7f5a`
-- [x] In-game: Era — collect LibDBIcon + named buttons, fade stays off, auto-hide, options list; shift-drag reorder + pin verified 2026-11-19
+- [x] In-game: Era — collect LibDBIcon + named buttons, fade stays off, auto-hide, options list; Alt-drag reorder + pin verified 2026-11-19
 - [ ] In-game: Era — release on untick (put back exactly where it was)
 - [ ] In-game: Forever — same, plus no crash with pin addons, compartment hide, Edit Mode minimap move
 - [ ] README/CHANGELOG final, owner sign-off, release via `cmd\release.cmd`
@@ -176,11 +177,16 @@ None open. Answered 2026-11-18 (owner):
    stone frame). `Scripts/MakeAddonIcon.cs` makes `Media/MinimapButtonTray.tga`, used for the main
    button texture and the TOC `IconTexture`.
 
-## Shift-drag: reorder and pin
+## Alt-drag: reorder and pin
 
-A collected button is dragged **only while Shift is held** (plain drag is still blocked: the addon's
+A collected button is dragged **only while Alt is held** (plain drag is still blocked: the addon's
 own drag handler would move the button around the minimap ring). While a button is held we own its
 `OnDragStart/OnDragStop`, so the drag is ours; the addon's handlers are restored on release.
+
+**Alt swallows every click** on a held button: `OnClick/OnMouseDown/OnMouseUp/OnDoubleClick` are wrapped
+(not replaced) so the addon's handler is skipped while `IsAltKeyDown()`. Reason: many addons bind a
+modified click to "hide my minimap icon" (Addon Profiler: shift-click), and a short drag reads as a
+click. Shift was the original modifier and collided with exactly that; Alt is rarely bound by addons.
 
 - **Ghost**: a `Texture` on a cursor-following frame copies the button's icon (first texture region
   with a file id; falls back to the addon icon); the button itself dims to 40% while dragged.
@@ -199,7 +205,7 @@ own drag handler would move the button around the minimap ring). While a button 
   Minimap|Button` suffixes, splits CamelCase with spaces. Used by the pinned rows and the options list.
 - Settings: `db.order` (array), `db.pinned` (array); both pruned of names not collected for 30 days?
   **No** — pruned never; a name of an uninstalled addon is harmless and comes back if reinstalled.
-- Tray tooltip gains *Shift-drag: reorder or pin*.
+- Tray tooltip gains *Alt-drag: reorder or pin*.
 
 Section anchors inside the tray (all relative to the tray's top-left corner for every grow direction;
 the tray as a whole still anchors to the main button per `TRAY_ANCHORS`):
