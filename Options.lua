@@ -300,8 +300,13 @@ local function createOptions()
   local Tray = MBT.Tray
 
   -- Lock first, directly under the intro: the thing most often toggled.
-  Place(Check(content, "locked", "Lock the tray button in place",
-    "Stops the button being dragged. The tray still opens and closes as normal."), -14)
+  local lockBox = Check(content, "locked", "Lock the tray button in place",
+    "Stops the button being dragged. The tray still opens and closes as normal.")
+  Place(lockBox, -14)
+  -- Same row, to the right of the lock box.
+  local tooltipBox = Check(content, "hideTooltip", "Disable the tray button tooltip",
+    "No tooltip when the mouse is over the tray button. Right-click still opens this page.")
+  tooltipBox:SetPoint("TOPLEFT", lockBox, "TOPLEFT", 300, 0)
 
   -- Section: Layout
   local layout = Section("Layout")

@@ -32,6 +32,7 @@ local DEFAULTS = {
   buttonScale = 1,          -- collected buttons, on top of scale, 0.5..2
   autoHideSeconds = 0.75,      -- idle seconds before the tray closes itself; 0 = never; 0..3 in 0.25 steps
   locked = false,           -- the main button cannot be dragged
+  hideTooltip = false,      -- no tooltip when hovering the main button
   hideCompartment = false,  -- hide Blizzard's addon compartment (clients that have one)
   showHidden = false,       -- show buttons their addon has hidden (a "hide minimap icon" option) in the tray anyway
   posX = nil,               -- main button centre offset from the minimap centre, UIParent units
@@ -297,6 +298,7 @@ commands.status = function()
   print("  Layout: " .. MBT.DirectionLabel(db.direction) .. ", " .. db.perRow .. " per row")
   print("  Auto-hide: " .. (db.autoHideSeconds > 0 and (db.autoHideSeconds .. " s idle") or "never"))
   print("  Button locked: " .. yesNo(db.locked))
+  print("  Button tooltip hidden: " .. yesNo(db.hideTooltip))
   if Client.hasCompartment then print("  Hide the addon compartment: " .. yesNo(db.hideCompartment)) end
 end
 

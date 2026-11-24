@@ -705,7 +705,7 @@ end
 -- frames
 -- ---------------------------------------------------------------------------
 local function showTooltip(self)
-  if not GameTooltip then return end
+  if not GameTooltip or MBT.db.hideTooltip then return end
   GameTooltip:SetOwner(self, "ANCHOR_LEFT")
   GameTooltip:AddLine("MinimapButtonTray")
   GameTooltip:AddLine(("%d button(s) collected"):format(#MBT.Collector.buttons), 1, 1, 1)

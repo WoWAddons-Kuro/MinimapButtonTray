@@ -122,6 +122,7 @@ open (name scan throttled to once per 5 s), `/mbt rescan`. Combat: scans are def
 | `buttonScale` | 1 | collected buttons, 0.5–2 |
 | `autoHideSeconds` | 0.75 | idle seconds before the tray closes itself; 0 = never; slider 0–3 step 0.25 |
 | `locked` | false | main button cannot be dragged |
+| `hideTooltip` | false | no tooltip on the main button; checkbox sits right of *Lock* on the options page |
 | `hideCompartment` | false | only shown when the client has one |
 | `showHidden` | false | a button its addon has hidden (its own "hide minimap icon" option) is shown in the tray anyway; `Grab` wraps `Show/Hide/SetShown` and records the addon's wish in `record.addonShown`, restored on release |
 | `posX`, `posY` | nil | main button offset from minimap centre; nil = default (bottom-left of the ring) |
